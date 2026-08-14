@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Weekend Meal Planner</title>
+  <style>
+    :root { font-family: system-ui, sans-serif; color: #25352f; background: #f3f7f3; }
+    body { margin: 0; padding: 2rem; }
+    .card { max-width: 720px; margin: 0 auto; background: white; border-radius: 20px; padding: 1.5rem; box-shadow: 0 12px 36px #19332518; }
+    h1 { margin-top: 0; } .intro, .muted { color: #64746c; }
+    form, .row, .choices { display: flex; gap: .6rem; flex-wrap: wrap; }
+    input, textarea, button { box-sizing: border-box; font: inherit; padding: .7rem; border-radius: 10px; border: 1px solid #cad8ce; }
+    input:not([type=checkbox]), textarea { flex: 1; min-width: 160px; } textarea { min-height: 90px; width: 100%; }
+    button { border: 0; background: #357052; color: white; cursor: pointer; } button.light { background: #e3eee7; color: #245339; }
+    ul { padding: 0; } li, .entry { list-style: none; display: flex; align-items: center; gap: .7rem; padding: .75rem 0; border-bottom: 1px solid #edf1ee; }
+    .entry { display: block; } .entry strong, .entry time { display: block; } .entry time { color: #77877e; font-size: .85rem; }
+    .remove { margin-left: auto; background: transparent; color: #a44848; padding: .2rem; } .done span { text-decoration: line-through; color: #7b8a82; }
+    .big { font-size: 4.5rem; font-weight: 700; text-align: center; color: #357052; margin: .5rem; font-variant-numeric: tabular-nums; }
+    .grid { display: grid; grid-template-columns: 110px 1fr; gap: .7rem; align-items: center; margin: .6rem 0; }
+    .selected { background: #254f3a; } .note { margin-top: 1rem; color: #4e6559; }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>Weekend Meal Planner</h1>
+    <p class="intro">Plan kindly, with room to change your mind.</p>
+    <div id="app"></div>
+  </main>
+<script>
+const mode = 'meals';
+const host = document.querySelector('#app');
+const key = 'mini-app-' + mode;
+const load = (fallback) => JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback));
+const save = (value) => localStorage.setItem(key, JSON.stringify(value));
+const text = (tag, value) => { const node = document.createElement(tag); node.textContent = value; return node; };
+
+function todos() {
+  let items = load([]);
+  host.innerHTML = '<form id="add"><input id="task" required placeholder="What would make today easier?"><button>Add</button></form><ul id="list"></ul>';
+  const render = () => { const list = document.querySelector('#list'); list.replaceChildren(); items.forEach((item, index) => { const row = document.createElement('li'); row.className = item.done ? 'done' : ''; const check = document.createElement('input'); check.type = 'checkbox'; check.checked = item.done; check.onchange = () => { item.done = check.checked; save(items); render(); }; const label = text('span', item.name); const remove = text('button', 'Remove'); remove.className = 'remove'; remove.onclick = () => { items.splice(index, 1); save(items); render(); }; row.append(check, label, remove); list.append(row); }); };
+  document.querySelector('#add').onsubmit = (event) => { event.preventDefault(); items.unshift({name: task.value.trim(), done: false}); event.target.reset(); save(items); render(); }; render();
+}
+function timer() {
+  let seconds = 1500, interval = null;
+  host.innerHTML = '<p class="big" id="clock">25:00</p><div class="row"><button id="start">Start</button><button id="pause" class="light">Pause</button><button id="reset" class="light">Reset</button></div><p class="note">A focused 25 minutes is plenty. Take a real break when it is done.</p>';
+  const draw = () => { clock.textContent = Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0'); };
+  start.onclick = () => { if (interval) return; interval = setInterval(() => { if (seconds) { seconds--; draw(); } else { clearInterval(interval); interval = null; alert('Nice work. Time for a small break.'); } }, 1000); };
+  pause.onclick = () => { clearInterval(interval); interval = null; }; reset.onclick = () => { clearInterval(interval); interval = null; seconds = 1500; draw(); }; draw();
+}
+function habits() {
+  const names = ['Drink a glass of water', 'Move for five minutes', 'Read a page', 'Tidy one small thing']; const day = new Date().toISOString().slice(0, 10); let state = JSON.parse(localStorage.getItem(key + day) || '{}'); host.innerHTML = '<p class="muted">' + new Date().toLocaleDateString(undefined, {weekday: 'long', month: 'long', day: 'numeric'}) + '</p><div id="habits"></div>';
+  names.forEach(name => { const row = document.createElement('label'); row.className = 'entry'; const check = document.createElement('input'); check.type = 'checkbox'; check.checked = !!state[name]; const label = text('span', name); const set = () => { row.classList.toggle('done', check.checked); state[name] = check.checked; localStorage.setItem(key + day, JSON.stringify(state)); }; check.onchange = set; row.append(check, label); habits.append(row); set(); });
+}
+function water() {
+  const dayKey = key + new Date().toISOString().slice(0, 10); let count = Number(localStorage.getItem(dayKey) || 0); host.innerHTML = '<p class="big"><span id="count"></span><small>/ 8</small></p><p id="drops" class="big" style="font-size:1.6rem"></p><div class="row"><button id="add">I had a glass</button><button id="undo" class="light">Undo</button></div>';
+  const draw = () => { count.textContent = count; drops.textContent = '💧'.repeat(count); }; add.onclick = () => { if (count < 8) { count++; localStorage.setItem(dayKey, count); draw(); } }; undo.onclick = () => { if (count) { count--; localStorage.setItem(dayKey, count); draw(); } }; draw();
+}
+function expenses() {
+  let entries = load([]); host.innerHTML = '<form id="add"><input id="what" required placeholder="Coffee, bus, groceries…"><input id="amount" type="number" step="0.01" min="0.01" required placeholder="Amount"><button>Add</button></form><p>Total: <strong id="total"></strong></p><ul id="list"></ul>';
+  const render = () => { let total = 0; list.replaceChildren(); entries.forEach((entry, index) => { total += entry.amount; const row = document.createElement('li'); row.append(text('span', entry.what), text('strong', entry.amount.toFixed(2))); const remove = text('button', 'Remove'); remove.className = 'remove'; remove.onclick = () => { entries.splice(index, 1); save(entries); render(); }; row.append(remove); list.append(row); }); document.querySelector('#total').textContent = total.toFixed(2); };
+  document.querySelector('#add').onsubmit = event => { event.preventDefault(); entries.unshift({what: what.value.trim(), amount: Number(amount.value)}); event.target.reset(); save(entries); render(); }; render();
+}
+function ideas() {
+  let entries = load([]); host.innerHTML = '<form id="add"><input id="title" required placeholder="Give the idea a small name"><textarea id="note" placeholder="What is it, in a sentence or two?"></textarea><button>Park this idea</button></form><div id="list"></div>';
+  const render = () => { list.replaceChildren(); entries.forEach((entry, index) => { const card = document.createElement('article'); card.className = 'entry'; const remove = text('button', 'Remove'); remove.className = 'remove'; remove.onclick = () => { entries.splice(index, 1); save(entries); render(); }; card.append(remove, text('strong', entry.title), text('p', entry.note)); list.append(card); }); };
+  document.querySelector('#add').onsubmit = event => { event.preventDefault(); entries.unshift({title: title.value.trim(), note: note.value.trim()}); event.target.reset(); save(entries); render(); }; render();
+}
+function meals() {
+  const days = ['Friday', 'Saturday', 'Sunday']; let plan = load({}); host.innerHTML = '<div id="days"></div><button id="save">Save my easy plan</button><p class="note" id="message"></p>'; days.forEach(day => { const label = document.createElement('label'); label.className = 'grid'; label.append(text('strong', day)); const input = document.createElement('input'); input.dataset.day = day; input.value = plan[day] || ''; input.placeholder = 'Something you would enjoy'; label.append(input); document.querySelector('#days').append(label); }); document.querySelector('#save').onclick = () => { document.querySelectorAll('#days input').forEach(input => plan[input.dataset.day] = input.value); save(plan); message.textContent = 'Saved. Future you will thank present you.'; };
+}
+function reading() {
+  let entries = load([]); host.innerHTML = '<form id="add"><input id="book" required placeholder="Book or article title"><input id="author" placeholder="Author (optional)"><textarea id="thought" placeholder="One thought worth saving"></textarea><button>Add to my nook</button></form><div id="list"></div>';
+  const render = () => { list.replaceChildren(); entries.forEach((entry, index) => { const card = document.createElement('article'); card.className = 'entry'; const remove = text('button', 'Remove'); remove.className = 'remove'; remove.onclick = () => { entries.splice(index, 1); save(entries); render(); }; card.append(remove, text('strong', entry.book), text('time', entry.author), text('p', entry.thought)); list.append(card); }); };
+  document.querySelector('#add').onsubmit = event => { event.preventDefault(); entries.unshift({book: book.value.trim(), author: author.value.trim(), thought: thought.value.trim()}); event.target.reset(); save(entries); render(); }; render();
+}
+function mood() {
+  let selected = '', entries = load([]); host.innerHTML = '<div class="choices" id="choices"></div><form id="add"><textarea id="note" placeholder="What is sitting with you right now?"></textarea><button>Save this check-in</button></form><div id="list"></div>'; ['Calm', 'Okay', 'Tired', 'Worried', 'Happy', 'Overwhelmed'].forEach(name => { const button = text('button', name); button.type = 'button'; button.onclick = () => { selected = name; document.querySelectorAll('#choices button').forEach(item => item.classList.toggle('selected', item.textContent === name)); }; choices.append(button); });
+  const render = () => { list.replaceChildren(); entries.forEach(entry => { const card = document.createElement('article'); card.className = 'entry'; card.append(text('strong', entry.mood), text('time', entry.date), text('p', entry.note)); list.append(card); }); };
+  document.querySelector('#add').onsubmit = event => { event.preventDefault(); if (!selected) { alert('Choose the feeling that is closest.'); return; } entries.unshift({mood: selected, note: note.value.trim(), date: new Date().toLocaleString()}); save(entries); event.target.reset(); selected = ''; document.querySelectorAll('#choices button').forEach(item => item.classList.remove('selected')); render(); }; render();
+}
+function wins() {
+  let entries = load([]); host.innerHTML = '<form id="add"><input id="win" required placeholder="Something you did, tried, or handled today"><button>Keep it</button></form><div id="list"></div>'; const render = () => { list.replaceChildren(); entries.forEach((entry, index) => { const card = document.createElement('article'); card.className = 'entry'; const remove = text('button', 'Remove'); remove.className = 'remove'; remove.onclick = () => { entries.splice(index, 1); save(entries); render(); }; card.append(remove, text('strong', entry.text), text('time', entry.date)); list.append(card); }); }; document.querySelector('#add').onsubmit = event => { event.preventDefault(); entries.unshift({text: win.value.trim(), date: new Date().toLocaleString()}); save(entries); event.target.reset(); render(); }; render();
+}
+({todos, timer, habits, water, expenses, ideas, meals, reading, mood, wins})[mode]();
+</script>
+</body>
+</html>
